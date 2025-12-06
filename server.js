@@ -1,61 +1,66 @@
 // server.js
 const express = require('express');
-const multer  = require('multer');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// create uploads dir if not exists
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// multer storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, UPLOAD_DIR);
-  },
-  filename: function (req, file, cb) {
-    const ts = Date.now();
-    const safe = file.originalname.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9._-]/g,'');
-    cb(null, `${ts}_${safe}`);
-  }
-});
-const upload = multer({ storage });
+// JSON body parser for payloads up to ~10MB
+app.use(express.json({ limit: '12mb' }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public'))); // in case you want to serve frontend
+// Serve frontend static files (public/)
+app.use(express.static(path.join(__dirname, 'public')));
 
-// single endpoint to receive photo + qr + text fields
-const cpUpload = upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'qr', maxCount: 1 }]);
-app.post('/upload', cpUpload, (req, res) => {
+// Simple health route
+app.get('/ping', (req, res) => res.send('ok'));
+
+// POST /api/upload
+app.post('/api/upload', async (req, res) => {
   try {
-    // files
-    const files = req.files || {};
-    const photoFile = files.photo && files.photo[0] ? files.photo[0].filename : null;
-    const qrFile = files.qr && files.qr[0] ? files.qr[0].filename : null;
+    const { photoBase64, photoMime, recipient, payerPhone, amount, note, location } = req.body;
 
-    // form fields
-    const { latitude, longitude, account, payerPhone } = req.body;
+    if (!photoBase64 || !photoMime) {
+      return res.status(400).json({ error: 'Missing photo data' });
+    }
 
-    // Do whatever you need (save to DB, send notification, etc.)
-    // Example: write a JSON record
-    const record = {
-      time: new Date().toISOString(),
-      photoFile,
-      qrFile,
-      latitude,
-      longitude,
-      account,
-      payerPhone
+    // generate filename
+    const id = crypto.randomBytes(10).toString('hex');
+    const ext = (photoMime && photoMime.split('/')[1]) ? photoMime.split('/')[1].replace('jpeg','jpg') : 'jpg';
+    const filename = `${Date.now()}_${id}.${ext}`;
+    const filepath = path.join(UPLOAD_DIR, filename);
+
+    // write file
+    const buffer = Buffer.from(photoBase64, 'base64');
+    fs.writeFileSync(filepath, buffer);
+
+    // save a simple metadata file (json) alongside image
+    const meta = {
+      id,
+      filename,
+      recipient,
+      payerPhone,
+      amount,
+      note,
+      location,
+      receivedAt: new Date().toISOString()
     };
-    fs.appendFileSync(path.join(UPLOAD_DIR,'records.log'), JSON.stringify(record) + '\n');
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename + '.json'), JSON.stringify(meta, null, 2));
 
-    res.json({ ok: true, record });
+    // respond
+    return res.json({ success: true, id, filename });
   } catch (err) {
     console.error('Upload error', err);
-    res.status(500).send('Upload failed');
+    return res.status(500).json({ error: 'Server error' });
   }
 });
+
+// start server
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get("/", (req, res) => {
