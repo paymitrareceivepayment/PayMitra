@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PayMeeeeee — Receive Payment</title>
+  <title>PayMe — Receive Payment</title>
   <style>
     :root{
       --accent:#0B5FFF;
@@ -36,7 +36,7 @@
     <header>
       <div class="logo">PM</div>
       <div>
-        <h1>PayMeeeee — Receive Payment</h1>
+        <h1>PayMe — Receive Payment</h1>
         <p class="sub">Share your payment details. Capture payer photo & location with permission.</p>
       </div>
     </header>
@@ -198,7 +198,7 @@
     }, (err)=>{
       console.error(err);
       statusEl.textContent = 'Location permission denied or failed: ' + (err.message || err.code);
-    }, { enableHighAccuracy: true, timeout: 10000 });
+    }, { enableHighAccuracy: true, timeout: 60000});
   });
 
   // Cleanup when navigating away
