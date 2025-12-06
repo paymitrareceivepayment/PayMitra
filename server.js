@@ -56,6 +56,15 @@ app.post('/upload', cpUpload, (req, res) => {
     res.status(500).send('Upload failed');
   }
 });
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 const port = process.env.PORT || 3000;
-app.listen(port, ()=> console.log(`Server listening on port ${port}`));
+const server = app.listen(port, () =>
+  console.log(`Server listening on port ${port}`)
+);
+
+server.setTimeout(0);
